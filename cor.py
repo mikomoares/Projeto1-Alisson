@@ -22,7 +22,7 @@ bridge = CvBridge()
 cv_image = None
 media = []
 centro = []
-atraso = 1.5E9 # 1 segundo e meio. Em nanossegundos
+atraso = 1E9 # 1 segundo e meio. Em nanossegundos
 
 area = 0.0 # Variavel com a area do maior contorno
 
@@ -59,15 +59,19 @@ if __name__=="__main__":
 
 	topico_imagem = "/kamera"
 	
-	# Para renomear a *webcam*
-	#
+	
 	#  para parar o robo
 	#
 	#  rostopic pub -1 /cmd_vel geometry_msgs/Twist -- '[0.0, 0.0, 0.0]' '[0.0, 0.0, 0.0]'
 	#
 	#  para ligar a camera
 	#
-	# rqt_image_view 
+	#   rqt_image_view 
+	#
+	#  roslaunch turtlebot3_bringup turtlebot3_remote.launch
+	#
+	#
+	# Para renomear a *webcam*
 	# 
 	# 	rosrun topic_tools relay  /cv_camera/image_raw/compressed /kamera
 	# 
@@ -88,14 +92,15 @@ if __name__=="__main__":
 	try:
 
 		while not rospy.is_shutdown():
-			vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+			print ("media: " +str(media))
+			print ("centro: " +str(centro))
 			if len(media) != 0 and len(centro) != 0:
-				if media[1] > centro[1]:
-					vel = Twist(Vector3(0,0,0), Vector3(0,0,0.2))
+				if media[0] > centro[1]:
+					vel = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.3))
 					velocidade_saida.publish(vel)
 					rospy.sleep(0.1)
-				elif media[1] < centro[1]:
-					vel = Twist(Vector3(0,0,0), Vector3(0,0,-0.2))
+				elif media[0] < centro[1]:
+					vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0.3))
 					velocidade_saida.publish(vel)
 					rospy.sleep(0.1)
 				else:
