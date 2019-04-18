@@ -4,6 +4,8 @@
 __author__ = ["Rachel P. B. Moraes", "Igor Montagner", "Fabio Miranda"]
 
 
+alvo = raw_input("digite o tipo do alvo: ")
+
 import rospy
 import numpy as np
 import tf
@@ -112,7 +114,7 @@ def roda_todo_frame(imagem):
         for r in resultados:
             # print(r) - print feito para documentar e entender
             # o resultado
-            if r[0] == "cat":
+            if r[0] == alvo:
                 viu_cat = True
                 pos_i = r[2]
                 pos_f = r[3]
