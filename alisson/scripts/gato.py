@@ -12,24 +12,27 @@ import cv2
 import time
 from geometry_msgs.msg import Twist, Vector3, Pose
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image, CompressedImage
+from sensor_msgs.msg import Image, CompressedImage, LaserScan
 from cv_bridge import CvBridge, CvBridgeError
 import visao_module
 import mobilenet_simples
 from math import pi
-from sensor_msgs.msg import LaserScan
 from std_msgs.msg import UInt8
+
+
 import cormodule
 
 
 bridge = CvBridge()
 
 cv_image = None
-dist = None
+
 
 #definições da camera
 centro = [320, 240]
 mediax = 0
+media_cor = []
+dist = None
 
 atraso = 1.5E9 # 1 segundo e meio. Em nanossegundos
 viu_cat = False
@@ -42,8 +45,7 @@ check_delay = False
 
 def scaneou(dado):
     global dist
-
-    dist = (np.array(dado.ranges))[0]
+    dist = list(dado.ranges)
 
 batida= None
 def bater(data):
@@ -53,6 +55,29 @@ def bater(data):
     print(batida)
     return batida
 
+def proximidade(dist):
+    esquerda = []
+    direita = []
+    if dist is not None:
+        for f in range(len(dist)):
+            if f <= 90:
+                if dist[f] ==float("Inf") or dist[f] ==0:
+                    direita.append(10)
+                else:
+                    direita.append(dist[f])
+            elif 360 >= f >=270:
+                if dist[f] == float("Inf") or dist[f] == 0:
+                    esquerda.append(10)
+                else:
+                    esquerda.append(dist[f])
+        if min (esquerda) < 0.3:
+            return "Esquerda"
+        elif min (direita) < 0.3:
+            return "Direita"
+        elif min(direita) < 0.3 and min(esquerda) < 0.3:
+            return "Direita"
+        else:
+            return "Normal"
 v = 0.14  
 w = (pi/10)
 # A função a seguir é chamada sempre que chega um novo frame
@@ -63,6 +88,7 @@ def roda_todo_frame(imagem):
     global media_cor
     global viu_cat
     global mediax
+    global distancia
 
     now = rospy.get_rostime()
     imgtime = imagem.header.stamp
@@ -77,7 +103,6 @@ def roda_todo_frame(imagem):
         cv_image = bridge.compressed_imgmsg_to_cv2(imagem, "bgr8")
         centro, imagem, resultados =  visao_module.processa(cv_image)
         media_cor, centro, area =  cormodule.identifica_cor(cv_image)
-
         #print (centro)
         #print (resultados)
         #print (type(resultados))
@@ -104,8 +129,6 @@ def roda_todo_frame(imagem):
                 #print (mediax)
 
         depois = time.clock()
-        # Desnecessário - Hough e MobileNet já abrem janelas
-        #cv2.imshow("Camera", cv_image)
     except CvBridgeError as e:
         print('ex', e)
     
@@ -120,7 +143,6 @@ if __name__=="__main__":
     topico_imagem = "/kamera"
 
     recebedor = rospy.Subscriber(topico_imagem, CompressedImage, roda_todo_frame, queue_size=4, buff_size = 2**24)
-    #print("Usando ", topico_imagem)
 
     try:
 
@@ -130,73 +152,83 @@ if __name__=="__main__":
                 #vel = Twist(Vector3(0,0,0), Vector3(0,0,pi))
                 #velocidade_saida.publish(vel)
                 #rospy.sleep(1)
+            perigo = proximidade(dist)
+            if perigo == "Normal":
+                if batida == 1:
+                    vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+                    velocidade_saida.publish(vel)
+                    rospy.sleep(1)
+                    vel = Twist(Vector3(-v/5,0,0), Vector3(0,0,-w*4))
+                    velocidade_saida.publish(vel)
+                    rospy.sleep(1.5)
+                    batida = 0
+                elif batida == 2:
+                    vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+                    velocidade_saida.publish(vel)
+                    rospy.sleep(1)
+                    vel = Twist(Vector3(-v/5,0,0), Vector3(0,0,4*w))
+                    velocidade_saida.publish(vel)
+                    rospy.sleep(1.5)
+                    batida = 0
+                elif batida == 3:
+                    vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+                    velocidade_saida.publish(vel)
+                    rospy.sleep(1)
+                    vel = Twist(Vector3(2*v,0,0), Vector3(0,0,0))
+                    velocidade_saida.publish(vel)
+                    rospy.sleep(1.5)
+                    batida = 0
+                elif batida == 4:
+                    vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+                    velocidade_saida.publish(vel)
+                    rospy.sleep(1)
+                    vel = Twist(Vector3(2*v,0,0), Vector3(0,0,0))
+                    velocidade_saida.publish(vel)
+                    rospy.sleep(1.5)
+                    batida = 0
+
+                elif batida is None or batida == 0: #and dist > 0.5:
+                    if viu_cat:
+                        if mediax-centro[0]>30:
+                            vel = Twist(Vector3(-0.8,0,0), Vector3(0,0,-0.8))
+                            velocidade_saida.publish(vel)
+                            rospy.sleep(0.8)
+                            viu_cat = False
+                        elif centro[0]-mediax>30:
+                            vel = Twist(Vector3(-0.8,0,0), Vector3(0,0,0.8))
+                            velocidade_saida.publish(vel)
+                            rospy.sleep(0.8)
+                            viu_cat = False
+                        elif mediax-centro[0]<30 or centro[0]-mediax< 30:
+                            vel = Twist(Vector3(-0.8,0,0), Vector3(0,0,0))
+                            velocidade_saida.publish(vel)
+                            rospy.sleep(0.8)
+                            viu_cat = False
+
+                    elif len(media_cor) != 0 and len(centro) != 0:
+                        if media_cor[0] > centro[1]:
+                            vel = Twist(Vector3(0.08,0,0), Vector3(0,0,-0.25))
+                            velocidade_saida.publish(vel)
+                            rospy.sleep(0.1)
+                        elif media_cor[0] < centro[1]:
+                            vel = Twist(Vector3(0.08,0,0), Vector3(0,0,0.25))
+                            velocidade_saida.publish(vel)
+                            rospy.sleep(0.1)
+                        else:
+                            vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+                            velocidade_saida.publish(vel)
+                            rospy.sleep(0.1)
+            elif perigo == "Direita":
+                vel = Twist(Vector3(0,0,0), Vector3(0,0,-0.4))
+                velocidade_saida.publish(vel)
+                rospy.sleep(0.4)
+
+            elif perigo == "Esquerda":
+                vel = Twist(Vector3(0,0,0), Vector3(0,0,0.4))
+                velocidade_saida.publish(vel)
+                rospy.sleep(0.4)
 
 
-            if batida is None or batida == 0: #and dist > 0.5:
-                if viu_cat:
-                    if mediax-centro[0]>30:
-                        vel = Twist(Vector3(-0.3,0,0), Vector3(0,0,-0.8))
-                        velocidade_saida.publish(vel)
-                        rospy.sleep(0.8)
-                        viu_cat = False
-                    elif centro[0]-mediax>30:
-                        vel = Twist(Vector3(-0.3,0,0), Vector3(0,0,0.8))
-                        velocidade_saida.publish(vel)
-                        rospy.sleep(0.8)
-                        viu_cat = False
-                    elif mediax-centro[0]<30 or centro[0]-mediax< 30:
-                        vel = Twist(Vector3(-0.8,0,0), Vector3(0,0,0))
-                        velocidade_saida.publish(vel)
-                        rospy.sleep(0.8)
-                        viu_cat = False
-
-                elif len(media_cor) != 0 and len(centro) != 0:
-                    if media_cor[1] > centro[1]:
-                        vel = Twist(Vector3(0,0,0), Vector3(0,0,0.2))
-                        velocidade_saida.publish(vel)
-                        rospy.sleep(0.1)
-                    elif media_cor[1] < centro[1]:
-                        vel = Twist(Vector3(0,0,0), Vector3(0,0,-0.2))
-                        velocidade_saida.publish(vel)
-                        rospy.sleep(0.1)
-                    else:
-                        vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-                        velocidade_saida.publish(vel)
-                        rospy.sleep(0.1)
-
-
-            elif batida == 1:
-                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-                velocidade_saida.publish(vel)
-                rospy.sleep(1)
-                vel = Twist(Vector3(-v/5,0,0), Vector3(0,0,-w*4))
-                velocidade_saida.publish(vel)
-                rospy.sleep(1.5)
-                batida = 0
-            elif batida == 2:
-                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-                velocidade_saida.publish(vel)
-                rospy.sleep(1)
-                vel = Twist(Vector3(-v/5,0,0), Vector3(0,0,4*w))
-                velocidade_saida.publish(vel)
-                rospy.sleep(1.5)
-                batida = 0
-            elif batida == 3:
-                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-                velocidade_saida.publish(vel)
-                rospy.sleep(1)
-                vel = Twist(Vector3(2*v,0,0), Vector3(0,0,0))
-                velocidade_saida.publish(vel)
-                rospy.sleep(1.5)
-                batida = 0
-            elif batida == 4:
-                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-                velocidade_saida.publish(vel)
-                rospy.sleep(1)
-                vel = Twist(Vector3(2*v,0,0), Vector3(0,0,0))
-                velocidade_saida.publish(vel)
-                rospy.sleep(1.5)
-                batida = 0
 
     except rospy.ROSInterruptException:
         print("Ocorreu uma exceção com o rospy")
